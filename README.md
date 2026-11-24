@@ -3,6 +3,16 @@
 ## Aim
 Demonstrate how conditional branches inside a warp slow down CUDA kernel execution due to warp divergence and evaluate architectural and algorithmic strategies to mitigate this overhead.
 
+## Objectives
+1. **Quantify the Performance Penalty of Intra-Warp Divergence (CP2):**  
+   Measure and compare execution times between thread-interleaved divergent branching (`threadIdx.x % 2 == 0`) and warp-aligned branching (`(threadIdx.x / 32) % 2 == 0`) on a $2^{24}$ element array, demonstrating the ~1.76× speedup achieved when all 32 threads in a warp follow identical control paths.
+2. **Evaluate Mitigation Strategies for Data-Dependent Branching (CP3):**  
+   Implement and benchmark algorithmic solutions for runtime data-dependent branches (`if (data[i] > 0.5f)`), including branch-free code via hardware predication (`(x > 0.5f) ? long_work : short_work`) and CPU-side data grouping to enforce uniform warp execution.
+3. **Analyze Multi-Path Divergence Scaling (CP5):**  
+   Empirically measure and model how GPU compute time scales as the number of active divergent paths per warp increases across 1, 2, 4, and 8 paths, validating the linear serialization overhead of the SIMT architecture.
+4. **Understand SIMT Hardware Execution and Active Masking (CP1 & Real-World Use):**  
+   Investigate the architectural behavior of NVIDIA Streaming Multiprocessors, examining how 32-bit active mask registers disable inactive threads during branch divergence and analyzing real-world mitigation techniques used in ray tracing, physical simulations, and database engines.
+
 ---
 
 ## Team Members

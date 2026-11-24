@@ -1,0 +1,17 @@
+# Ignore OS generated files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Build artifacts (optional/intermediates)
+*.obj
+*.o
+*.lib
+*.exp
+*.ilk
+*.pdb
+
+# IDE / Editor folders
+.vscode/
+.vs/
+.idea/

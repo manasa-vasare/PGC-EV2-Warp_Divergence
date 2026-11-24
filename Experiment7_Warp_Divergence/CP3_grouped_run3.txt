@@ -1,0 +1,35 @@
+========================================
+ CP3: DATA-DEPENDENT BRANCH + GROUPING
+========================================
+Array size         : 16777216
+Threads per block  : 256
+Warp size          : 32
+Grid size          : 65536
+Timed repetitions  : 10
+
+========== GROUPING INFO ==========
+Short-path elements : 8556388
+Long-path elements  : 8220828
+Grouping performed on CPU.
+Grouping time is excluded from kernel timing.
+
+========================================
+              RESULTS
+========================================
+Data-dependent branch : 0.3558 ms | Correctness: PASS
+Grouped data kernel  : 0.3658 ms | Correctness: PASS
+Compute-both/select  : 0.3605 ms | Correctness: PASS
+
+========================================
+       SPEEDUP VS BASELINE
+========================================
+Grouped data speedup : 0.9728x
+Branch-free speedup  : 0.9870x
+
+Note: CPU grouping and extra memory transfer
+are excluded from grouped kernel timing.
+
+========================================
+       EXPERIMENT COMPLETED
+========================================
+All correctness checks PASSED.

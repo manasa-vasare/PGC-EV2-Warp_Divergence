@@ -1,0 +1,27 @@
+========================================
+ CP3: DATA-DEPENDENT BRANCH
+========================================
+Array size        : 16777216
+Threads per block : 256
+Warp size         : 32
+Grid size         : 65536
+Benchmark runs    : 10
+
+Initializing input data...
+Running data-dependent kernel...
+Running branch-free kernel...
+
+========================================
+ PERFORMANCE RESULTS
+========================================
+Data-dependent branch: 0.3564 ms
+Branch-free version : 0.3623 ms
+
+========================================
+ SPEEDUP COMPARISON
+========================================
+Data branch / branch-free: 0.9836x
+
+========================================
+ CP3 COMPLETED SUCCESSFULLY
+========================================

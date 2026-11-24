@@ -1,0 +1,22 @@
+========================================
+ CP2: DIVERGENT VS ALIGNED BRANCH
+========================================
+Array size       : 16777216
+Threads per block: 256
+Warp size        : 32
+Grid size        : 65536
+Iterations        : 10
+
+Running divergent kernel...
+Running aligned kernel...
+
+========================================
+ RESULTS
+========================================
+Divergent branch: 0.2988 ms
+Aligned branch  : 0.1693 ms
+
+Speedup (divergent / aligned): 1.7647x
+========================================
+ CP2 COMPLETED SUCCESSFULLY
+========================================

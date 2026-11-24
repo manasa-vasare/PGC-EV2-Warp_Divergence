@@ -1,4 +1,4 @@
-# Experiment 7: Analysis and Mitigation of Warp Divergence in NVIDIA CUDA
+# Theme 7: Analysis and Mitigation of Warp Divergence in NVIDIA CUDA
 
 ## Aim
 Demonstrate how conditional branches inside a warp slow down CUDA kernel execution due to warp divergence and evaluate architectural and algorithmic strategies to mitigate this overhead.

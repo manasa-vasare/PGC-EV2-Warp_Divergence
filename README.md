@@ -3,7 +3,7 @@
 ## Overview
 In the NVIDIA CUDA Single Instruction, Multiple Threads (SIMT) execution model, threads are scheduled and executed in groups of 32 parallel execution units known as **warps**. When threads within the same warp follow different control flow paths (conditional branches such as `if-else`), the warp serially executes each branch path while disabling threads not active on that path. This phenomenon is known as **Warp Divergence**.
 
-This repository contains comprehensive source code, compiled binaries, benchmark logs, and performance analyses for **Experiment 7: Warp Divergence**, exploring:
+This repository contains comprehensive source code, compiled binaries, benchmark logs, and execution result screenshots for **Experiment 7: Warp Divergence**, exploring:
 1. **Divergent vs. Aligned Control Paths (CP2)**
 2. **Data-Dependent Branching, Branch-Free Optimizations & Data Grouping (CP3)**
 3. **Scaling of Multi-Path Divergence per Warp (CP5)**
@@ -23,6 +23,13 @@ This repository contains comprehensive source code, compiled binaries, benchmark
 ```
 .
 ├── README.md
+├── results/                                   # Execution output screenshots
+│   ├── CP2_run1.jpeg, CP2_run2.jpeg, CP2_run3.jpeg
+│   ├── CP3_run1.jpeg, CP3_run2.jpeg, CP3_run3.jpeg
+│   ├── CP3_grouped_run1.jpeg, CP3_grouped_run2.jpeg, CP3_grouped_run3.jpeg
+│   ├── CP5_run1.jpeg, CP5_run2.jpeg, CP5_run3.jpeg
+│   ├── CP5_terminal_run.jpeg
+│   └── WhatsApp Image ... (raw captures)
 └── Experiment7_Warp_Divergence/
     ├── warp_divergence.cu                     # Integrated benchmark suite covering all checkpoints
     ├── warp_divergence.exe                    # Compiled binary of warp_divergence
@@ -67,6 +74,11 @@ This repository contains comprehensive source code, compiled binaries, benchmark
 
 **Observation:** Aligning branch execution along 32-thread warp boundaries eliminates divergence penalties, yielding a **~1.76x speedup**.
 
+#### Execution Screenshots:
+| CP2 Run 1 | CP2 Run 2 | CP2 Run 3 |
+|---|---|---|
+| ![CP2 Run 1](results/CP2_run1.jpeg) | ![CP2 Run 2](results/CP2_run2.jpeg) | ![CP2 Run 3](results/CP2_run3.jpeg) |
+
 ---
 
 ### 2. Checkpoint 3 (CP3): Data-Dependent Branching & Mitigation
@@ -76,12 +88,28 @@ This repository contains comprehensive source code, compiled binaries, benchmark
   2. **Branch-Free Optimization:** Computing both paths unconditionally and selecting the output using ternary / predicated instructions.
   3. **Data Grouping (CPU Pre-sorting):** Segregating data into contiguous long-path and short-path arrays prior to kernel launch so warps execute homogeneous tasks.
 
-#### Performance Results:
+#### Performance Results (CP3 Baseline):
 | Variant | Run 1 Time (ms) | Run 2 Time (ms) | Run 3 Time (ms) | Speedup vs Baseline |
 |---|---|---|---|---|
-| **Data-Dependent Branch** | 0.3555 ms | 0.3579 ms | 0.3562 ms | 1.0000x (Baseline) |
-| **Branch-Free (Compute-Both)** | 0.3606 ms | 0.3610 ms | 0.3621 ms | ~0.985x |
-| **Grouped Data Kernel** | 0.3703 ms | 0.3672 ms | 0.3685 ms | ~0.967x |
+| **Data-Dependent Branch** | 0.3564 ms | 0.3569 ms | 0.3604 ms | 1.0000x (Baseline) |
+| **Branch-Free Version** | 0.3623 ms | 0.3637 ms | 0.3633 ms | ~0.985x |
+
+#### CP3 Baseline Screenshots:
+| CP3 Run 1 | CP3 Run 2 | CP3 Run 3 |
+|---|---|---|
+| ![CP3 Run 1](results/CP3_run1.jpeg) | ![CP3 Run 2](results/CP3_run2.jpeg) | ![CP3 Run 3](results/CP3_run3.jpeg) |
+
+#### Performance Results (CP3 Grouping Optimization):
+| Variant | Run 1 Time (ms) | Run 2 Time (ms) | Run 3 Time (ms) | Speedup vs Baseline | Correctness |
+|---|---|---|---|---|---|
+| **Data-Dependent Branch** | 0.3555 ms | 0.3579 ms | 0.3558 ms | 1.0000x | PASS |
+| **Grouped Data Kernel** | 0.3703 ms | 0.3672 ms | 0.3658 ms | ~0.970x | PASS |
+| **Compute-Both / Select** | 0.3606 ms | 0.3610 ms | 0.3605 ms | ~0.986x | PASS |
+
+#### CP3 Grouped Screenshots:
+| CP3 Grouped Run 1 | CP3 Grouped Run 2 | CP3 Grouped Run 3 |
+|---|---|---|
+| ![CP3 Grouped Run 1](results/CP3_grouped_run1.jpeg) | ![CP3 Grouped Run 2](results/CP3_grouped_run2.jpeg) | ![CP3 Grouped Run 3](results/CP3_grouped_run3.jpeg) |
 
 **Observation:** When computation paths involve lightweight or instruction-level balanced workloads, branch prediction and predication hardware handle data-dependent paths efficiently. For heavier divergences, CPU-side grouping removes intra-warp divergence on the GPU, though CPU sorting and memory transfer costs must be factored into end-to-end pipelined systems.
 
@@ -91,14 +119,22 @@ This repository contains comprehensive source code, compiled binaries, benchmark
 Evaluates warp execution degradation as the number of distinct divergent execution paths per warp increases (1, 2, 4, and 8 paths using `threadIdx.x % K` with equal 64-iteration workload per path).
 
 #### Performance Results:
-| Path Configuration | Run 1 Time (ms) | Run 2 Time (ms) | Run 3 Time (ms) | Ratio vs 1-Path Baseline |
-|---|---|---|---|---|
-| **1 Path (No Divergence)** | 0.3677 ms | 0.3705 ms | 0.3550 ms | **1.000x** (Baseline) |
-| **2 Paths** | 0.5345 ms | 0.5306 ms | 0.5315 ms | **~1.46x** |
-| **4 Paths** | 1.0003 ms | 0.9934 ms | 0.9936 ms | **~2.73x** |
-| **8 Paths** | 1.9718 ms | 1.9688 ms | 1.9678 ms | **~5.41x** |
+| Path Configuration | Run 1 Time (ms) | Run 2 Time (ms) | Run 3 Time (ms) | Ratio vs 1-Path Baseline | Correctness |
+|---|---|---|---|---|---|
+| **1 Path (No Divergence)** | 0.3677 ms | 0.3705 ms | 0.3550 ms | **1.000x** (Baseline) | PASS |
+| **2 Paths** | 0.5345 ms | 0.5306 ms | 0.5315 ms | **~1.46x** | PASS |
+| **4 Paths** | 1.0003 ms | 0.9934 ms | 0.9936 ms | **~2.73x** | PASS |
+| **8 Paths** | 1.9718 ms | 1.9688 ms | 1.9678 ms | **~5.41x** | PASS |
 
 **Observation:** Execution time scales directly with the number of divergent paths executed within a warp. As active paths increase from 1 to 8, execution time increases by over 5.4x due to sequential path serialization.
+
+#### Execution Screenshots:
+| CP5 Run 1 | CP5 Run 2 | CP5 Run 3 |
+|---|---|---|
+| ![CP5 Run 1](results/CP5_run1.jpeg) | ![CP5 Run 2](results/CP5_run2.jpeg) | ![CP5 Run 3](results/CP5_run3.jpeg) |
+
+#### CP5 Live Terminal Execution:
+![CP5 Terminal Run](results/CP5_terminal_run.jpeg)
 
 ---
 

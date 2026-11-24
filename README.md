@@ -1,13 +1,7 @@
 # Experiment 7: Analysis and Mitigation of Warp Divergence in NVIDIA CUDA
 
-## Overview
-In the NVIDIA CUDA Single Instruction, Multiple Threads (SIMT) execution model, threads are scheduled and executed in groups of 32 parallel execution units known as **warps**. When threads within the same warp follow different control flow paths (conditional branches such as `if-else`), the warp serially executes each branch path while disabling threads not active on that path. This phenomenon is known as **Warp Divergence**.
-
-This repository contains comprehensive source code, compiled binaries, benchmark logs, and execution result screenshots for **Experiment 7: Warp Divergence**, exploring:
-1. **Divergent vs. Aligned Control Paths (CP2)**
-2. **Data-Dependent Branching, Branch-Free Optimizations & Data Grouping (CP3)**
-3. **Scaling of Multi-Path Divergence per Warp (CP5)**
-4. **End-to-End Warp Divergence Benchmark Suite (`warp_divergence.cu`)**
+## Aim
+Demonstrate how conditional branches inside a warp slow down CUDA kernel execution due to warp divergence and evaluate architectural and algorithmic strategies to mitigate this overhead.
 
 ---
 
@@ -15,6 +9,17 @@ This repository contains comprehensive source code, compiled binaries, benchmark
 - **Aditya R Gavimath** (USN: 01FE24BCI120)
 - **Manasa B Vasare** (USN: 01FE24BCI113)
 - **Renuka Kagadal** (USN: 01FE24BCI119)
+
+---
+
+## Tools and Experimental Setup
+- **Compiler:** NVIDIA CUDA Compiler (`nvcc`) with `-O3` optimization
+- **Timing Mechanism:** High-resolution hardware CUDA Events (`cudaEventCreate`, `cudaEventRecord`, `cudaEventElapsedTime`)
+- **Dataset Size ($N$):** $16,777,216$ elements ($2^{24}$)
+- **Thread Block Configuration:** $256$ threads per block
+- **Warp Size:** $32$ threads (hardware SIMT execution unit)
+- **Grid Configuration:** $65,536$ blocks
+- **Benchmark Iterations:** $10$ timed repetitions per kernel execution
 
 ---
 
@@ -30,6 +35,8 @@ This repository contains comprehensive source code, compiled binaries, benchmark
 │   ├── CP5_run1.jpeg, CP5_run2.jpeg, CP5_run3.jpeg
 │   ├── CP5_terminal_run.jpeg
 │   └── WhatsApp Image ... (raw captures)
+├── presentation/                              # Presentation directory (PPTX slide deck)
+│   └── .gitkeep
 └── Experiment7_Warp_Divergence/
     ├── warp_divergence.cu                     # Integrated benchmark suite covering all checkpoints
     ├── warp_divergence.exe                    # Compiled binary of warp_divergence
@@ -49,30 +56,58 @@ This repository contains comprehensive source code, compiled binaries, benchmark
 
 ---
 
-## Experimental Setup & Parameters
-- **Input Array Size ($N$):** $16,777,216$ elements ($2^{24}$)
-- **Threads Per Block:** $256$
-- **Warp Size:** $32$ threads
-- **Grid Size:** $65,536$ blocks
-- **Timed Repetitions:** $10$ iterations per benchmark kernel
+## Checkpoint 1 (CP1): SIMT Architecture, Warps, and Active Mask
+
+### 1. The SIMT Execution Model
+In NVIDIA GPU architectures, threads are organized and executed according to the **Single Instruction, Multiple Threads (SIMT)** execution model. The fundamental unit of scheduling and execution on a Streaming Multiprocessor (SM) is a **warp**, consisting of **32 lockstep parallel threads**.
+All 32 threads in a warp issue and execute the exact same instruction simultaneously on separate data elements.
+
+### 2. Why Both Paths Run When a Warp Diverges
+A warp has only one Instruction Pointer / Program Counter (PC). When a data-dependent or thread-dependent condition (such as `if-else`) evaluates to different Boolean outcomes across threads in the same warp:
+1. The hardware **cannot** execute both branches simultaneously.
+2. The hardware must **serialize** the execution:
+   - First, it executes the `if` (True) branch path. Threads evaluating to `False` are **masked off** (inactive).
+   - Next, it executes the `else` (False) branch path. Threads that already executed the `if` path are now masked off.
+3. As a result, the total execution time of the warp is the **sum of all branch paths taken**, severely decreasing GPU throughput and compute utilization.
+
+### 3. The Active Mask Diagram
+Inactive threads are disabled using a per-warp **Active Mask** (a 32-bit bitmask register):
+
+```
+Threads in Warp (0-31):
+Thread ID:    0  1  2  3  4  5  6  7  ... 30 31
+Condition:    T  F  T  F  T  F  T  F  ...  T  F  (e.g., threadIdx.x % 2 == 0)
+
+Step 1: Execute Path A (Long Work)
+Active Mask:  1  0  1  0  1  0  1  0  ...  1  0  -> [Threads 1,3,5... disabled]
+Time spent:   T_long
+
+Step 2: Execute Path B (Short Work)
+Active Mask:  0  1  0  1  0  1  0  1  ...  0  1  -> [Threads 0,2,4... disabled]
+Time spent:   T_short
+
+Total Warp Execution Time = T_long + T_short (Serialized Execution)
+```
 
 ---
 
-## Detailed Checkpoint Analysis & Results
+## Checkpoint 2 (CP2): Divergent vs. Aligned Branching
 
-### 1. Checkpoint 2 (CP2): Divergent vs. Aligned Branching
-- **Divergent Kernel:** Condition based on `threadIdx.x % 2 == 0`. Consecutive threads in the same warp take alternating paths (`long_work` vs `short_work`), forcing complete warp serialization.
-- **Aligned Kernel:** Condition based on `(threadIdx.x / 32) % 2 == 0`. All 32 threads in any given warp evaluate the condition identically, eliminating intra-warp divergence.
+### Kernel Implementation Comparison
+- **Divergent Kernel:** Branch condition evaluated per thread: `if (threadIdx.x % 2 == 0)`.
+  Consecutive threads in the warp take alternating paths (`long_work` vs `short_work`), inducing 100% intra-warp divergence.
+- **Aligned Kernel:** Branch condition evaluated per whole warp: `if ((threadIdx.x / 32) % 2 == 0)`.
+  All 32 threads in an entire warp evaluate identically (`threadIdx.x / 32` yields the warp index). Entire warps take either Path A or Path B, completely eliminating divergence.
 
-#### Performance Results:
-| Run | Divergent Branch (ms) | Aligned Branch (ms) | Speedup (Divergent / Aligned) |
-|---|---|---|---|
-| **Run 1** | 0.2995 ms | 0.1689 ms | **1.7729x** |
-| **Run 2** | 0.2988 ms | 0.1693 ms | **1.7647x** |
-| **Run 3** | 0.2993 ms | 0.1716 ms | **1.7440x** |
-| **Average** | **0.2992 ms** | **0.1699 ms** | **~1.7605x** |
+### Performance Results
+| Run | Divergent Branch (ms) | Aligned Branch (ms) | Speedup (Divergent / Aligned) | Correctness |
+|---|---|---|---|---|
+| **Run 1** | 0.2995 ms | 0.1689 ms | **1.7729x** | PASS |
+| **Run 2** | 0.2988 ms | 0.1693 ms | **1.7647x** | PASS |
+| **Run 3** | 0.2993 ms | 0.1716 ms | **1.7440x** | PASS |
+| **Average** | **0.2992 ms** | **0.1699 ms** | **~1.7605x** | PASS |
 
-**Observation:** Aligning branch execution along 32-thread warp boundaries eliminates divergence penalties, yielding a **~1.76x speedup**.
+**Key Finding:** Aligning branches across 32-thread warp boundaries removes serialization, delivering an average **1.76x speedup**.
 
 #### Execution Screenshots:
 | CP2 Run 1 | CP2 Run 2 | CP2 Run 3 |
@@ -81,60 +116,96 @@ This repository contains comprehensive source code, compiled binaries, benchmark
 
 ---
 
-### 2. Checkpoint 3 (CP3): Data-Dependent Branching & Mitigation
-- Evaluates scenarios where branching depends on runtime data rather than thread indices.
-- Explores mitigation strategies:
-  1. **Baseline Data-Dependent Branch:** Standard `if (val > threshold)` conditional.
-  2. **Branch-Free Optimization:** Computing both paths unconditionally and selecting the output using ternary / predicated instructions.
-  3. **Data Grouping (CPU Pre-sorting):** Segregating data into contiguous long-path and short-path arrays prior to kernel launch so warps execute homogeneous tasks.
+## Checkpoint 3 (CP3): Data-Dependent Branching and Mitigations
 
-#### Performance Results (CP3 Baseline):
-| Variant | Run 1 Time (ms) | Run 2 Time (ms) | Run 3 Time (ms) | Speedup vs Baseline |
-|---|---|---|---|---|
-| **Data-Dependent Branch** | 0.3564 ms | 0.3569 ms | 0.3604 ms | 1.0000x (Baseline) |
-| **Branch-Free Version** | 0.3623 ms | 0.3637 ms | 0.3633 ms | ~0.985x |
+In realistic workloads, branch decisions depend on incoming data rather than thread indices (e.g. `if (data[idx] > 0.5f)`). Two major mitigation strategies are evaluated:
 
-#### CP3 Baseline Screenshots:
-| CP3 Run 1 | CP3 Run 2 | CP3 Run 3 |
+1. **Branch-Free Code (Predication / Compute-Both):**
+   Computes both arithmetic results and uses conditional selection (`(x > 0.5f) ? long_res : short_res`). This avoids control-flow branch divergence by utilizing GPU predicated execution (PTX `@p` instructions / `ISELP`).
+2. **Data Sorting / Grouping:**
+   Pre-segregates input data on CPU into homogeneous partitions (all short-path items followed by all long-path items) before launching the kernel so warps execute uniform paths.
+
+### Performance Results:
+| Variant | Run 1 Time (ms) | Run 2 Time (ms) | Run 3 Time (ms) | Speedup vs Baseline | Correctness |
+|---|---|---|---|---|---|
+| **Data-Dependent Branch (Baseline)** | 0.3555 ms | 0.3579 ms | 0.3558 ms | 1.0000x (Baseline) | PASS |
+| **Branch-Free (Compute-Both / Predicated)** | 0.3606 ms | 0.3610 ms | 0.3605 ms | ~0.986x | PASS |
+| **Grouped Data Kernel** | 0.3703 ms | 0.3672 ms | 0.3658 ms | ~0.970x | PASS |
+
+**Analysis:**
+- When branch code blocks have low instruction overhead, the GPU's hardware predication handles divergent branches efficiently without pipeline flushes.
+- For data grouping, while intra-warp divergence on the GPU is eliminated, the end-to-end efficiency depends on whether the preprocessing/sorting cost can be amortized over repeated kernel invocations.
+
+#### Screenshots:
+| CP3 Baseline Run 1 | CP3 Baseline Run 2 | CP3 Baseline Run 3 |
 |---|---|---|
 | ![CP3 Run 1](results/CP3_run1.jpeg) | ![CP3 Run 2](results/CP3_run2.jpeg) | ![CP3 Run 3](results/CP3_run3.jpeg) |
 
-#### Performance Results (CP3 Grouping Optimization):
-| Variant | Run 1 Time (ms) | Run 2 Time (ms) | Run 3 Time (ms) | Speedup vs Baseline | Correctness |
-|---|---|---|---|---|---|
-| **Data-Dependent Branch** | 0.3555 ms | 0.3579 ms | 0.3558 ms | 1.0000x | PASS |
-| **Grouped Data Kernel** | 0.3703 ms | 0.3672 ms | 0.3658 ms | ~0.970x | PASS |
-| **Compute-Both / Select** | 0.3606 ms | 0.3610 ms | 0.3605 ms | ~0.986x | PASS |
-
-#### CP3 Grouped Screenshots:
 | CP3 Grouped Run 1 | CP3 Grouped Run 2 | CP3 Grouped Run 3 |
 |---|---|---|
 | ![CP3 Grouped Run 1](results/CP3_grouped_run1.jpeg) | ![CP3 Grouped Run 2](results/CP3_grouped_run2.jpeg) | ![CP3 Grouped Run 3](results/CP3_grouped_run3.jpeg) |
 
-**Observation:** When computation paths involve lightweight or instruction-level balanced workloads, branch prediction and predication hardware handle data-dependent paths efficiently. For heavier divergences, CPU-side grouping removes intra-warp divergence on the GPU, though CPU sorting and memory transfer costs must be factored into end-to-end pipelined systems.
+---
+
+## Checkpoint 4 (CP4): Consolidated Results Table
+
+| Checkpoint & Kernel Variant | Run 1 (ms) | Run 2 (ms) | Run 3 (ms) | Average (ms) | Speedup vs Divergent | Status |
+|---|---|---|---|---|---|---|
+| **CP2 Divergent Branch** (`threadIdx.x % 2 == 0`) | 0.2995 | 0.2988 | 0.2993 | 0.2992 | 1.0000x (Baseline) | PASS |
+| **CP2 Aligned Branch** (`(threadIdx.x / 32) % 2 == 0`) | 0.1689 | 0.1693 | 0.1716 | **0.1699** | **1.7605x** | PASS |
+| **CP3 Data-Dependent Branch** | 0.3555 | 0.3579 | 0.3558 | 0.3564 | Baseline | PASS |
+| **CP3 Branch-Free (Predicated)** | 0.3606 | 0.3610 | 0.3605 | 0.3607 | 0.9881x | PASS |
+| **CP3 Grouped Data Kernel** | 0.3703 | 0.3672 | 0.3658 | 0.3678 | 0.9690x | PASS |
+| **CP5 Path Count: 1 Path (Uniform)** | 0.3677 | 0.3705 | 0.3550 | **0.3644** | Baseline (1.00x) | PASS |
+| **CP5 Path Count: 2 Paths** | 0.5345 | 0.5306 | 0.5315 | 0.5322 | **1.46x slowdown** | PASS |
+| **CP5 Path Count: 4 Paths** | 1.0003 | 0.9934 | 0.9936 | 0.9958 | **2.73x slowdown** | PASS |
+| **CP5 Path Count: 8 Paths** | 1.9718 | 1.9688 | 1.9678 | 1.9695 | **5.41x slowdown** | PASS |
 
 ---
 
-### 3. Checkpoint 5 (CP5): Multi-Path Divergence Scaling
-Evaluates warp execution degradation as the number of distinct divergent execution paths per warp increases (1, 2, 4, and 8 paths using `threadIdx.x % K` with equal 64-iteration workload per path).
+## Checkpoint 5 (CP5): Multi-Path Divergence Scaling & Analysis
 
-#### Performance Results:
-| Path Configuration | Run 1 Time (ms) | Run 2 Time (ms) | Run 3 Time (ms) | Ratio vs 1-Path Baseline | Correctness |
-|---|---|---|---|---|---|
-| **1 Path (No Divergence)** | 0.3677 ms | 0.3705 ms | 0.3550 ms | **1.000x** (Baseline) | PASS |
-| **2 Paths** | 0.5345 ms | 0.5306 ms | 0.5315 ms | **~1.46x** | PASS |
-| **4 Paths** | 1.0003 ms | 0.9934 ms | 0.9936 ms | **~2.73x** | PASS |
-| **8 Paths** | 1.9718 ms | 1.9688 ms | 1.9678 ms | **~5.41x** | PASS |
+### 1. Why Divergence Cost Scales with Path Count
+As the number of distinct execution paths taken within a single warp increases, the warp must issue each separate instruction stream consecutively.
+In this experiment, warps execute $K \in \{1, 2, 4, 8\}$ distinct computational paths of 64 iterations each:
 
-**Observation:** Execution time scales directly with the number of divergent paths executed within a warp. As active paths increase from 1 to 8, execution time increases by over 5.4x due to sequential path serialization.
+$$\text{Warp Execution Time} \approx \sum_{k=1}^{K} T_k$$
+
+| Divergent Paths per Warp | Average Time (ms) | Slowdown Factor vs 1 Path | Theoretical Worst-Case |
+|---|---|---|---|
+| **1 Path (Aligned / Uniform)** | 0.3644 ms | **1.00x** | $1\times$ |
+| **2 Paths** | 0.5322 ms | **1.46x** | $2\times$ |
+| **4 Paths** | 0.9958 ms | **2.73x** | $4\times$ |
+| **8 Paths** | 1.9695 ms | **5.41x** | $8\times$ |
+
+**Observation:** Execution time increases directly in proportion to the number of divergent branch paths active in the warp. At 8 paths, execution is over $5.4\times$ slower than the non-divergent baseline.
 
 #### Execution Screenshots:
 | CP5 Run 1 | CP5 Run 2 | CP5 Run 3 |
 |---|---|---|
 | ![CP5 Run 1](results/CP5_run1.jpeg) | ![CP5 Run 2](results/CP5_run2.jpeg) | ![CP5 Run 3](results/CP5_run3.jpeg) |
 
-#### CP5 Live Terminal Execution:
+#### Terminal Output:
 ![CP5 Terminal Run](results/CP5_terminal_run.jpeg)
+
+---
+
+## Industry Relevance and Practical Applications
+
+Warp divergence is one of the most critical performance bottlenecks in high-performance GPU computing. Key industry applications include:
+
+1. **GPU Ray Tracing and BVH Traversal (e.g., NVIDIA OptiX, Unreal Engine Lumen):**
+   - In ray tracing, primary and secondary rays travel in divergent directions and hit different geometry (triangles) or materials (glass, metal, diffuse).
+   - If adjacent threads within a warp trace rays hitting different shaders, the warp diverges across all shader evaluations.
+   - **Industry Solution:** *Wavefront Path Tracing* and *Ray Sorting* (e.g., sorting rays by material ID or spatial octree cells prior to intersection testing to maintain warp uniformity).
+
+2. **Physical Simulations & Collision Detection (e.g., PhysX, ANSYS, Molecular Dynamics):**
+   - Particles only compute complex collision reactions when in contact with bounding geometry, while free-flowing particles take a trivial path.
+   - **Industry Solution:** Spatial binning / grid hashing where neighboring particles are packed into contiguous memory buffers so each warp processes uniformly interacting particles.
+
+3. **Database Query Engines & OLAP (e.g., OmniSci / HeavyDB, GPU-accelerated DuckDB):**
+   - Complex SQL queries with multi-predicate filtering (`WHERE age > 30 AND status = 'active'`).
+   - **Industry Solution:** Predicated bitmask filtering and columnar layout compression, executing vectorized evaluations without branching.
 
 ---
 
@@ -146,8 +217,6 @@ Evaluates warp execution degradation as the number of distinct divergent executi
 - C++11 or higher standard library
 
 ### Build Commands (using `nvcc`)
-
-To compile all checkpoints from inside `Experiment7_Warp_Divergence/`:
 
 ```powershell
 # Navigate to experiment folder

@@ -31,40 +31,6 @@ Demonstrate how conditional branches inside a warp slow down CUDA kernel executi
 - **Grid Configuration:** $65,536$ blocks
 - **Benchmark Iterations:** $10$ timed repetitions per kernel execution
 
----
-
-## Repository Structure
-
-```
-.
-├── README.md
-├── results/                                   # Execution output screenshots
-│   ├── CP2_run1.jpeg, CP2_run2.jpeg, CP2_run3.jpeg
-│   ├── CP3_run1.jpeg, CP3_run2.jpeg, CP3_run3.jpeg
-│   ├── CP3_grouped_run1.jpeg, CP3_grouped_run2.jpeg, CP3_grouped_run3.jpeg
-│   ├── CP5_run1.jpeg, CP5_run2.jpeg, CP5_run3.jpeg
-│   ├── CP5_terminal_run.jpeg
-│   └── WhatsApp Image ... (raw captures)
-├── presentation/                              # Presentation directory (PPTX slide deck)
-│   └── .gitkeep
-└── Experiment7_Warp_Divergence/
-    ├── warp_divergence.cu                     # Integrated benchmark suite covering all checkpoints
-    ├── warp_divergence.exe                    # Compiled binary of warp_divergence
-    ├── CP2_divergent_vs_aligned.cu            # Checkpoint 2: Divergent vs. Aligned branching
-    ├── CP2.exe                                # Compiled binary for CP2
-    ├── CP2_run1.txt, CP2_run2.txt, CP2_run3.txt # CP2 execution and timing logs
-    ├── CP3_data_dependent_vs_optimized.cu     # Checkpoint 3: Data-dependent vs. Branch-free
-    ├── CP3.exe                                # Compiled binary for CP3 baseline
-    ├── CP3_grouped_optimization.cu            # Checkpoint 3: Grouped data kernel optimization
-    ├── CP3_grouped.exe                        # Compiled binary for CP3 grouped
-    ├── CP3_run1.txt .. CP3_run3.txt           # CP3 data-dependent execution logs
-    ├── CP3_grouped_run1.txt .. run3.txt       # CP3 grouped execution logs
-    ├── CP5_path_count.cu                      # Checkpoint 5: Path count scaling (1, 2, 4, 8 paths)
-    ├── CP5_path_count.exe                     # Compiled binary for CP5
-    └── CP5_run1.txt .. CP5_run3.txt           # CP5 multi-path execution logs
-```
-
----
 
 ## Checkpoint 1 (CP1): SIMT Architecture, Warps, and Active Mask
 
@@ -254,3 +220,39 @@ nvcc -O3 -arch=native warp_divergence.cu -o warp_divergence.exe
 ./CP5_path_count.exe
 ./warp_divergence.exe
 ```
+
+---
+
+## Repository Structure
+
+```
+.
+├── README.md
+├── results/                                   # Execution output screenshots
+│   ├── CP2_run1.jpeg, CP2_run2.jpeg, CP2_run3.jpeg
+│   ├── CP3_run1.jpeg, CP3_run2.jpeg, CP3_run3.jpeg
+│   ├── CP3_grouped_run1.jpeg, CP3_grouped_run2.jpeg, CP3_grouped_run3.jpeg
+│   ├── CP5_run1.jpeg, CP5_run2.jpeg, CP5_run3.jpeg
+│   ├── CP5_terminal_run.jpeg
+│   └── WhatsApp Image ... (raw captures)
+├── presentation/                              # Presentation directory (PPTX slide deck)
+│   └── .gitkeep
+└── Experiment7_Warp_Divergence/
+    ├── warp_divergence.cu                     # Integrated benchmark suite covering all checkpoints
+    ├── warp_divergence.exe                    # Compiled binary of warp_divergence
+    ├── CP2_divergent_vs_aligned.cu            # Checkpoint 2: Divergent vs. Aligned branching
+    ├── CP2.exe                                # Compiled binary for CP2
+    ├── CP2_run1.txt, CP2_run2.txt, CP2_run3.txt # CP2 execution and timing logs
+    ├── CP3_data_dependent_vs_optimized.cu     # Checkpoint 3: Data-dependent vs. Branch-free
+    ├── CP3.exe                                # Compiled binary for CP3 baseline
+    ├── CP3_grouped_optimization.cu            # Checkpoint 3: Grouped data kernel optimization
+    ├── CP3_grouped.exe                        # Compiled binary for CP3 grouped
+    ├── CP3_run1.txt .. CP3_run3.txt           # CP3 data-dependent execution logs
+    ├── CP3_grouped_run1.txt .. run3.txt       # CP3 grouped execution logs
+    ├── CP5_path_count.cu                      # Checkpoint 5: Path count scaling (1, 2, 4, 8 paths)
+    ├── CP5_path_count.exe                     # Compiled binary for CP5
+    └── CP5_run1.txt .. CP5_run3.txt           # CP5 multi-path execution logs
+```
+
+---
+
